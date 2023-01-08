@@ -35,7 +35,10 @@ fn repo_into_response(error: repository::Error) -> Response {
 
     match error {
         Error::NotFound => StatusCode::NOT_FOUND.into_response(),
-        _ => (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response(),
+        _ => {
+            tracing::error!("{}", error);
+            (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
+        }
     }
 }
 
@@ -48,7 +51,10 @@ fn security_into_response(error: security::Error) -> Response {
 
     match error {
         Error::JwtInvalidAudience => (StatusCode::UNAUTHORIZED, error.to_string()).into_response(),
-        _ => (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response(),
+        _ => {
+            tracing::error!("{}", error);
+            (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
+        }
     }
 }
 
