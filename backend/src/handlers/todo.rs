@@ -67,9 +67,9 @@ pub async fn create_todo(
 ) -> Result<impl IntoResponse, Error> {
     payload.validate()?;
 
-    Ok(Json(
-        actions::create_todo(&db, &user.id, &payload.name).await?,
-    ))
+    let todo = actions::create_todo(&db, &user.id, &payload.name).await?;
+
+    Ok((StatusCode::CREATED, Json(todo)))
 }
 
 pub async fn get_todo(
