@@ -1,0 +1,20 @@
+.form-sign {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+}
+
+.form-sign>form {
+    width: 330px;
+    margin: auto;
+}
+
+.spinner-container {
+    height: 100vh;
+}
+
+.spinner-container>.spinner-border {
+    width: 10rem;
+    height: 10rem;
+    border-width: .75rem;
+}
