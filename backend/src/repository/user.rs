@@ -69,14 +69,12 @@ impl<'a> Repo<'a> for UserRepo<'a> {
             .into_table(q::User::Table)
             .columns([
                 q::User::Id,
-                q::User::Sid,
                 q::User::Username,
                 q::User::HashedPassword,
                 q::User::JoinedAt,
             ])
             .values([
                 item.id.into(),
-                item.sid.into(),
                 item.username.clone().into(),
                 item.hashed_password.clone().into(),
                 item.joined_at.into(),
@@ -99,7 +97,6 @@ impl<'a> Repo<'a> for UserRepo<'a> {
         let (sql, values) = q::Query::update()
             .table(q::User::Table)
             .values([
-                (q::User::Sid, item.sid.into()),
                 (q::User::Username, item.username.clone().into()),
                 (q::User::HashedPassword, item.hashed_password.clone().into()),
                 (q::User::JoinedAt, item.joined_at.into()),

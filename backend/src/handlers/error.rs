@@ -17,8 +17,6 @@ pub enum Error {
     Security(#[from] security::Error),
     #[error("InvalidCredentials")]
     InvalidCredentials,
-    #[error("InvalidToken")]
-    InvalidToken,
 }
 
 fn action_into_response(error: actions::Error) -> Response {
@@ -69,7 +67,6 @@ impl IntoResponse for Error {
             Error::InvalidCredentials => {
                 (StatusCode::UNAUTHORIZED, self.to_string()).into_response()
             }
-            Error::InvalidToken => (StatusCode::UNAUTHORIZED, self.to_string()).into_response(),
         }
     }
 }

@@ -42,13 +42,9 @@ pub async fn sign_refresh(
     Extension(db): Extension<PgPool>,
     TypedHeader(Authorization(token)): TypedHeader<Authorization<Bearer>>,
 ) -> Result<impl IntoResponse, Error> {
-    let claims = security::verify_refresh_token(token.token().to_string()).await?;
+    let user_id = security::verify_refresh_token(token.token().to_string()).await?;
 
-    let user = actions::get_user_by_id(&db, &claims.sub).await?;
-
-    if user.sid != claims.sid {
-        return Err(Error::InvalidToken);
-    }
+    let user = actions::get_user_by_id(&db, &user_id).await?;
 
     Ok(Json(security::create_token(user).await?))
 }

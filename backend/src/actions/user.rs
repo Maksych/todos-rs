@@ -27,7 +27,6 @@ pub async fn create_user(db: &PgPool, username: &str, password: &str) -> Result<
 
     let user = User {
         id: Uuid::new_v4(),
-        sid: Uuid::new_v4(),
         username: username.to_owned(),
         hashed_password: security::hash_password(password.to_owned()).await?,
         joined_at: Utc::now(),
@@ -41,7 +40,6 @@ pub async fn change_password(db: &PgPool, id: &Uuid, password: &str) -> Result<U
 
     let mut user = repo.get_by_id(id).await?;
 
-    user.sid = Uuid::new_v4();
     user.hashed_password = security::hash_password(password.into()).await?;
 
     Ok(repo.update(user).await?)

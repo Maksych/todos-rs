@@ -19,11 +19,10 @@ pub struct Claims {
     pub iat: u64,
     pub nbf: u64,
     pub sub: Uuid,
-    pub sid: Uuid,
 }
 
 impl Claims {
-    fn new(sub: Uuid, sid: Uuid, aud: Audience, exp: u64) -> Self {
+    fn new(sub: Uuid, aud: Audience, exp: u64) -> Self {
         let now = jwt::get_current_timestamp();
 
         Self {
@@ -32,7 +31,6 @@ impl Claims {
             iat: now,
             nbf: now,
             sub,
-            sid,
         }
     }
 }
@@ -47,10 +45,9 @@ pub async fn create_token(user: User) -> Result<Token, Error> {
     task::spawn_blocking(move || {
         let header = jwt::Header::default();
 
-        let access_claims = Claims::new(user.id, user.sid, Audience::Access, ACCESS_EXPIRE_SECONDS);
+        let access_claims = Claims::new(user.id, Audience::Access, ACCESS_EXPIRE_SECONDS);
 
-        let refresh_claims =
-            Claims::new(user.id, user.sid, Audience::Refresh, REFRESH_EXPIRE_SECONDS);
+        let refresh_claims = Claims::new(user.id, Audience::Refresh, REFRESH_EXPIRE_SECONDS);
 
         let key = get_encoding_key()?;
 
@@ -68,7 +65,7 @@ pub fn get_encoding_key() -> Result<jwt::EncodingKey, Error> {
     Ok(jwt::EncodingKey::from_secret(secret.as_bytes()))
 }
 
-pub async fn verify_token(token: String, aud: Audience) -> Result<Claims, Error> {
+pub async fn verify_token(token: String, aud: Audience) -> Result<Uuid, Error> {
     task::spawn_blocking(move || {
         let key = get_decoding_key()?;
 
@@ -77,7 +74,7 @@ pub async fn verify_token(token: String, aud: Audience) -> Result<Claims, Error>
         let token_data = jwt::decode::<Claims>(&token, &key, &validation)?;
 
         if token_data.claims.aud == aud {
-            Ok(token_data.claims)
+            Ok(token_data.claims.sub)
         } else {
             Err(Error::JwtInvalidAudience)
         }
@@ -91,10 +88,10 @@ pub fn get_decoding_key() -> Result<jwt::DecodingKey, Error> {
     Ok(jwt::DecodingKey::from_secret(secret.as_bytes()))
 }
 
-pub async fn verify_access_token(token: String) -> Result<Claims, Error> {
+pub async fn verify_access_token(token: String) -> Result<Uuid, Error> {
     verify_token(token, Audience::Access).await
 }
 
-pub async fn verify_refresh_token(token: String) -> Result<Claims, Error> {
+pub async fn verify_refresh_token(token: String) -> Result<Uuid, Error> {
     verify_token(token, Audience::Refresh).await
 }
