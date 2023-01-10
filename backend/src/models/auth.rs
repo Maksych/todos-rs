@@ -58,13 +58,17 @@ where
                 )
             })?;
 
-        let user_id = security::verify_access_token(token.token().to_owned())
+        let claims = security::verify_access_token(token.token().to_owned())
             .await
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid or expired token"))?;
 
-        let user = actions::get_user_by_id(&db, &user_id)
+        let user = actions::get_user_by_id(&db, &claims.sub)
             .await
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Error get user by id"))?;
+
+        if user.sid != claims.sid {
+            return Err((StatusCode::UNAUTHORIZED, "Invalid or expired token"));
+        }
 
         Ok(Self {
             id: user.id,

@@ -4,6 +4,7 @@ pub use sea_query::*;
 pub enum User {
     Table,
     Id,
+    Sid,
     Username,
     HashedPassword,
     JoinedAt,
