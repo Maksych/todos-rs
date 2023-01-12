@@ -166,9 +166,9 @@ pub async fn rename_todo(
 ) -> Result<impl IntoResponse, HandlerError> {
     payload.validate()?;
 
-    actions::rename_todo(&db, &user.id, &id, &payload.name).await?;
-
-    Ok(Json(actions::get_todo(&db, &user.id, &id).await?))
+    Ok(Json(
+        actions::rename_todo(&db, &user.id, &id, &payload.name).await?,
+    ))
 }
 
 pub async fn done_todo(
@@ -176,9 +176,7 @@ pub async fn done_todo(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, HandlerError> {
-    actions::done_todo(&db, &user.id, &id).await?;
-
-    Ok(Json(actions::get_todo(&db, &user.id, &id).await?))
+    Ok(Json(actions::done_todo(&db, &user.id, &id).await?))
 }
 
 pub async fn revert_todo(
@@ -186,9 +184,7 @@ pub async fn revert_todo(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, HandlerError> {
-    actions::revert_todo(&db, &user.id, &id).await?;
-
-    Ok(Json(actions::get_todo(&db, &user.id, &id).await?))
+    Ok(Json(actions::revert_todo(&db, &user.id, &id).await?))
 }
 
 pub async fn delete_todo(
