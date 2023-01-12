@@ -1,21 +1,31 @@
 use chrono::Utc;
 use sqlx::PgPool;
+use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    models::Todo,
-    query as q,
-    repository::{Repo, TodoRepo, UserRepo},
+    auth::repository::UserRepo,
+    repository::{Repository, RepositoryError},
 };
 
-use super::Error;
+use super::{models::Todo, query as q, repository::TodoRepo};
+
+#[derive(Debug, Error)]
+pub enum ActionError {
+    #[error("Repo: {0}")]
+    Repository(#[from] RepositoryError),
+    #[error("Forbidden")]
+    Forbidden,
+    #[error("Not Found")]
+    NotFound,
+}
 
 pub async fn get_todos_count(
     db: &PgPool,
     user_id: &Uuid,
     limit: &u64,
     offset: &u64,
-) -> Result<i64, Error> {
+) -> Result<i64, ActionError> {
     Ok(TodoRepo::new(db)
         .count(|stmt| {
             stmt.and_where(q::Expr::col(q::Todo::UserId).eq(*user_id))
@@ -30,7 +40,7 @@ pub async fn get_todos(
     user_id: &Uuid,
     limit: &u64,
     offset: &u64,
-) -> Result<Vec<Todo>, Error> {
+) -> Result<Vec<Todo>, ActionError> {
     Ok(TodoRepo::new(db)
         .select(|stmt| {
             stmt.and_where(q::Expr::col(q::Todo::UserId).eq(*user_id))
@@ -47,7 +57,7 @@ pub async fn get_todos_count_by_done(
     is_done: bool,
     limit: &u64,
     offset: &u64,
-) -> Result<i64, Error> {
+) -> Result<i64, ActionError> {
     Ok(TodoRepo::new(db)
         .count(|stmt| {
             stmt.and_where(q::Expr::col(q::Todo::UserId).eq(*user_id))
@@ -64,7 +74,7 @@ pub async fn get_todos_by_done(
     is_done: bool,
     limit: &u64,
     offset: &u64,
-) -> Result<Vec<Todo>, Error> {
+) -> Result<Vec<Todo>, ActionError> {
     Ok(TodoRepo::new(db)
         .select(|stmt| {
             stmt.and_where(q::Expr::col(q::Todo::UserId).eq(*user_id))
@@ -76,7 +86,7 @@ pub async fn get_todos_by_done(
         .await?)
 }
 
-pub async fn create_todo(db: &PgPool, user_id: &Uuid, name: &str) -> Result<Todo, Error> {
+pub async fn create_todo(db: &PgPool, user_id: &Uuid, name: &str) -> Result<Todo, ActionError> {
     UserRepo::new(db).get_by_id(user_id).await?;
 
     let now = Utc::now();
@@ -94,13 +104,19 @@ pub async fn create_todo(db: &PgPool, user_id: &Uuid, name: &str) -> Result<Todo
     Ok(TodoRepo::new(db).insert(todo).await?)
 }
 
-pub async fn get_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, Error> {
-    let user = UserRepo::new(db).get_by_id(user_id).await?;
+pub async fn get_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, ActionError> {
+    let user = UserRepo::new(db)
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
-    let todo = TodoRepo::new(db).get_by_id(id).await?;
+    let todo = TodoRepo::new(db)
+        .get_by_id(id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     if todo.user_id != user.id {
-        return Err(Error::Forbidden);
+        return Err(ActionError::Forbidden);
     }
 
     Ok(todo)
@@ -111,15 +127,21 @@ pub async fn rename_todo(
     user_id: &Uuid,
     id: &Uuid,
     name: &str,
-) -> Result<Todo, Error> {
-    let user = UserRepo::new(db).get_by_id(user_id).await?;
+) -> Result<Todo, ActionError> {
+    let user = UserRepo::new(db)
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let mut todo = repo.get_by_id(id).await?;
+    let mut todo = repo
+        .get_by_id(id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     if todo.user_id != user.id {
-        return Err(Error::Forbidden);
+        return Err(ActionError::Forbidden);
     }
 
     todo.name = name.to_owned();
@@ -127,15 +149,21 @@ pub async fn rename_todo(
     Ok(repo.update(todo).await?)
 }
 
-pub async fn done_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, Error> {
-    let user = UserRepo::new(db).get_by_id(user_id).await?;
+pub async fn done_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, ActionError> {
+    let user = UserRepo::new(db)
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let mut todo = repo.get_by_id(id).await?;
+    let mut todo = repo
+        .get_by_id(id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     if todo.user_id != user.id {
-        return Err(Error::Forbidden);
+        return Err(ActionError::Forbidden);
     }
 
     let now = Utc::now();
@@ -147,15 +175,21 @@ pub async fn done_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, E
     Ok(repo.update(todo).await?)
 }
 
-pub async fn revert_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, Error> {
-    let user = UserRepo::new(db).get_by_id(user_id).await?;
+pub async fn revert_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, ActionError> {
+    let user = UserRepo::new(db)
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let mut todo = repo.get_by_id(id).await?;
+    let mut todo = repo
+        .get_by_id(id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     if todo.user_id != user.id {
-        return Err(Error::Forbidden);
+        return Err(ActionError::Forbidden);
     }
 
     todo.is_done = false;
@@ -165,15 +199,21 @@ pub async fn revert_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo,
     Ok(repo.update(todo).await?)
 }
 
-pub async fn delete_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<(), Error> {
-    let user = UserRepo::new(db).get_by_id(user_id).await?;
+pub async fn delete_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<(), ActionError> {
+    let user = UserRepo::new(db)
+        .get_by_id(user_id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let todo = repo.get_by_id(id).await?;
+    let todo = repo
+        .get_by_id(id)
+        .await?
+        .ok_or_else(|| ActionError::NotFound)?;
 
     if todo.user_id != user.id {
-        return Err(Error::Forbidden);
+        return Err(ActionError::Forbidden);
     }
 
     Ok(repo.delete(todo).await?)

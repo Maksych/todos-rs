@@ -5,26 +5,11 @@ use axum::{
     Extension, TypedHeader,
 };
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
-use validator::Validate;
 
-use crate::{actions, security};
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct Credentials {
-    #[validate(length(min = 5))]
-    pub username: String,
-    #[validate(length(min = 10))]
-    pub password: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Token {
-    pub access: String,
-    pub refresh: String,
-}
+use crate::auth::{actions, security};
 
 #[derive(Debug, Serialize)]
 pub struct AuthUser {

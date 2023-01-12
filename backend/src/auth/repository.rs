@@ -3,32 +3,33 @@ use sea_query_binder::SqlxBinder;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use crate::{models::User, query as q};
+use crate::repository::{Repository, RepositoryError};
 
-use super::{Error, Repo};
+use super::{models::User, query as q};
 
 pub struct UserRepo<'a> {
     db: &'a PgPool,
 }
 
 impl<'a> UserRepo<'a> {
-    pub async fn get_by_username(&self, username: &str) -> Result<User, Error> {
-        self.get(|stmt| {
-            stmt.and_where(q::Expr::col(q::User::Username).eq(username));
-        })
-        .await
+    pub async fn get_by_username(&self, username: &str) -> Result<Option<User>, RepositoryError> {
+        Ok(self
+            .get(|stmt| {
+                stmt.and_where(q::Expr::col(q::User::Username).eq(username));
+            })
+            .await?)
     }
 }
 
 #[async_trait]
-impl<'a> Repo<'a> for UserRepo<'a> {
+impl<'a> Repository<'a> for UserRepo<'a> {
     type Model = User;
 
     fn new(db: &'a PgPool) -> Self {
         Self { db }
     }
 
-    async fn select<F>(&self, f: F) -> Result<Vec<Self::Model>, Error>
+    async fn select<F>(&self, f: F) -> Result<Vec<Self::Model>, RepositoryError>
     where
         F: FnOnce(&mut q::SelectStatement) + Send,
     {
@@ -42,7 +43,7 @@ impl<'a> Repo<'a> for UserRepo<'a> {
         Ok(sqlx::query_as_with(&sql, values).fetch_all(self.db).await?)
     }
 
-    async fn count<F>(&self, f: F) -> Result<i64, Error>
+    async fn count<F>(&self, f: F) -> Result<i64, RepositoryError>
     where
         F: FnOnce(&mut q::SelectStatement) + Send,
     {
@@ -64,7 +65,7 @@ impl<'a> Repo<'a> for UserRepo<'a> {
             .try_get(0)?)
     }
 
-    async fn insert(&self, item: Self::Model) -> Result<Self::Model, Error> {
+    async fn insert(&self, item: Self::Model) -> Result<Self::Model, RepositoryError> {
         let (sql, values) = q::Query::insert()
             .into_table(q::User::Table)
             .columns([
@@ -86,14 +87,15 @@ impl<'a> Repo<'a> for UserRepo<'a> {
         Ok(item)
     }
 
-    async fn get_by_id(&self, id: &Uuid) -> Result<Self::Model, Error> {
-        self.get(|stmt| {
-            stmt.and_where(q::Expr::col(q::User::Id).eq(*id));
-        })
-        .await
+    async fn get_by_id(&self, id: &Uuid) -> Result<Option<Self::Model>, RepositoryError> {
+        Ok(self
+            .get(|stmt| {
+                stmt.and_where(q::Expr::col(q::User::Id).eq(*id));
+            })
+            .await?)
     }
 
-    async fn update(&self, item: Self::Model) -> Result<Self::Model, Error> {
+    async fn update(&self, item: Self::Model) -> Result<Self::Model, RepositoryError> {
         let (sql, values) = q::Query::update()
             .table(q::User::Table)
             .values([
@@ -109,7 +111,7 @@ impl<'a> Repo<'a> for UserRepo<'a> {
         Ok(item)
     }
 
-    async fn delete(&self, item: Self::Model) -> Result<(), Error> {
+    async fn delete(&self, item: Self::Model) -> Result<(), RepositoryError> {
         let (sql, values) = q::Query::delete()
             .from_table(q::User::Table)
             .and_where(q::Expr::col(q::User::Id).eq(item.id))

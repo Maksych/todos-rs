@@ -3,23 +3,23 @@ use sea_query_binder::SqlxBinder;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use crate::{models::Todo, query as q};
+use crate::repository::{Repository, RepositoryError};
 
-use super::{Error, Repo};
+use super::{models::Todo, query as q};
 
 pub struct TodoRepo<'a> {
     db: &'a PgPool,
 }
 
 #[async_trait]
-impl<'a> Repo<'a> for TodoRepo<'a> {
+impl<'a> Repository<'a> for TodoRepo<'a> {
     type Model = Todo;
 
     fn new(db: &'a PgPool) -> Self {
         Self { db }
     }
 
-    async fn select<F>(&self, f: F) -> Result<Vec<Self::Model>, Error>
+    async fn select<F>(&self, f: F) -> Result<Vec<Self::Model>, RepositoryError>
     where
         F: FnOnce(&mut q::SelectStatement) + Send,
     {
@@ -33,7 +33,7 @@ impl<'a> Repo<'a> for TodoRepo<'a> {
         Ok(sqlx::query_as_with(&sql, values).fetch_all(self.db).await?)
     }
 
-    async fn count<F>(&self, f: F) -> Result<i64, Error>
+    async fn count<F>(&self, f: F) -> Result<i64, RepositoryError>
     where
         F: FnOnce(&mut q::SelectStatement) + Send,
     {
@@ -55,7 +55,7 @@ impl<'a> Repo<'a> for TodoRepo<'a> {
             .try_get(0)?)
     }
 
-    async fn insert(&self, item: Self::Model) -> Result<Self::Model, Error> {
+    async fn insert(&self, item: Self::Model) -> Result<Self::Model, RepositoryError> {
         let (sql, values) = q::Query::insert()
             .into_table(q::Todo::Table)
             .columns([
@@ -83,14 +83,14 @@ impl<'a> Repo<'a> for TodoRepo<'a> {
         Ok(item)
     }
 
-    async fn get_by_id(&self, id: &Uuid) -> Result<Self::Model, Error> {
+    async fn get_by_id(&self, id: &Uuid) -> Result<Option<Self::Model>, RepositoryError> {
         self.get(|stmt| {
             stmt.and_where(q::Expr::col(q::Todo::Id).eq(*id));
         })
         .await
     }
 
-    async fn update(&self, item: Self::Model) -> Result<Self::Model, Error> {
+    async fn update(&self, item: Self::Model) -> Result<Self::Model, RepositoryError> {
         let (sql, values) = q::Query::update()
             .table(q::Todo::Table)
             .values([
@@ -109,7 +109,7 @@ impl<'a> Repo<'a> for TodoRepo<'a> {
         Ok(item)
     }
 
-    async fn delete(&self, item: Self::Model) -> Result<(), Error> {
+    async fn delete(&self, item: Self::Model) -> Result<(), RepositoryError> {
         let (sql, values) = q::Query::delete()
             .from_table(q::Todo::Table)
             .and_where(q::Expr::col(q::Todo::Id).eq(item.id))
