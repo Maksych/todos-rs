@@ -108,12 +108,12 @@ pub async fn get_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, Ac
     let user = UserRepo::new(db)
         .get_by_id(user_id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+        .ok_or(ActionError::NotFound)?;
 
     let todo = TodoRepo::new(db)
         .get_by_id(id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+        .ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
@@ -131,14 +131,11 @@ pub async fn rename_todo(
     let user = UserRepo::new(db)
         .get_by_id(user_id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+        .ok_or(ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let mut todo = repo
-        .get_by_id(id)
-        .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+    let mut todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
@@ -153,14 +150,11 @@ pub async fn done_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, A
     let user = UserRepo::new(db)
         .get_by_id(user_id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+        .ok_or(ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let mut todo = repo
-        .get_by_id(id)
-        .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+    let mut todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
@@ -179,14 +173,11 @@ pub async fn revert_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo,
     let user = UserRepo::new(db)
         .get_by_id(user_id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+        .ok_or(ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let mut todo = repo
-        .get_by_id(id)
-        .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+    let mut todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
@@ -203,14 +194,11 @@ pub async fn delete_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<(), A
     let user = UserRepo::new(db)
         .get_by_id(user_id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+        .ok_or(ActionError::NotFound)?;
 
     let repo = TodoRepo::new(db);
 
-    let todo = repo
-        .get_by_id(id)
-        .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+    let todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);

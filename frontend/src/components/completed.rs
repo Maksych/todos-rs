@@ -14,8 +14,6 @@ pub fn completed() -> Html {
     let api = use_api();
 
     let get_todos = {
-        let store = store.clone();
-
         move || {
             let store = store.clone();
 
@@ -27,9 +25,8 @@ pub fn completed() -> Html {
         }
     };
 
-    let get_todos_first = get_todos.clone();
     use_effect(move || {
-        get_todos_first();
+        get_todos();
     });
 
     let is_show = use_state(|| false);
@@ -56,7 +53,7 @@ pub fn completed() -> Html {
                 <button class="btn btn-primary" { onclick }>{ "Add todo" }</button>
             </div>
             if *is_show {
-                <Modal title="Add todo" is_show={is_show.clone()}>
+                <Modal title="Add todo" is_show={is_show}>
                     <TodoAdd { on_add } />
                 </Modal>
             }

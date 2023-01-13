@@ -26,7 +26,7 @@ impl Api {
     pub fn request_with_auth(&self, url: &str) -> Request {
         let token = (*self.store).clone().auth.token.unwrap().access;
 
-        self.request_with_token(&url, &token)
+        self.request_with_token(url, &token)
     }
 
     pub fn request_with_token(&self, url: &str, token: &str) -> Request {
@@ -161,7 +161,7 @@ impl Api {
 pub fn use_api() -> Api {
     let store = use_store();
 
-    Api::new("http://127.0.0.1:8080/api/v1/".to_owned(), store.clone())
+    Api::new("http://127.0.0.1:8080/api/v1/".to_owned(), store)
 }
 
 #[derive(Deserialize)]

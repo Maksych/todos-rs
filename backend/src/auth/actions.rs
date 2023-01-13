@@ -48,7 +48,7 @@ pub async fn sign_in(db: &PgPool, username: &str, password: &str) -> Result<Toke
     let user = UserRepo::new(db)
         .get_by_username(username)
         .await?
-        .ok_or_else(|| ActionError::InvalidCredentials)?;
+        .ok_or(ActionError::InvalidCredentials)?;
 
     if !security::verify_password(password.to_owned(), user.hashed_password.clone()).await? {
         return Err(ActionError::InvalidCredentials);
@@ -68,7 +68,7 @@ pub async fn change_password(
     let mut user = repo
         .get_by_id(user_id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)?;
+        .ok_or(ActionError::NotFound)?;
 
     if !security::verify_password(password.to_owned().clone(), user.hashed_password.clone()).await?
     {
@@ -85,7 +85,7 @@ pub async fn change_password(
 pub async fn sign_refresh(db: &PgPool, token: String) -> Result<Token, ActionError> {
     let user_id = security::verify_refresh_token(token).await?;
 
-    let user = get_user_by_id(&db, &user_id).await?;
+    let user = get_user_by_id(db, &user_id).await?;
 
     Ok(security::create_token(user).await?)
 }
@@ -94,5 +94,5 @@ pub async fn get_user_by_id(db: &PgPool, id: &Uuid) -> Result<User, ActionError>
     UserRepo::new(db)
         .get_by_id(id)
         .await?
-        .ok_or_else(|| ActionError::NotFound)
+        .ok_or(ActionError::NotFound)
 }

@@ -12,7 +12,7 @@ pub struct TodoAddProps {
 pub fn add_todo(props: &TodoAddProps) -> Html {
     let api = use_api();
 
-    let name = use_state(|| String::new());
+    let name = use_state(String::new);
 
     let onchange = {
         let name = name.clone();
@@ -25,8 +25,6 @@ pub fn add_todo(props: &TodoAddProps) -> Html {
     };
 
     let onsubmit = {
-        let api = api.clone();
-
         let name = name.clone();
 
         let on_add = props.on_add.clone();

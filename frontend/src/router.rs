@@ -97,10 +97,6 @@ pub fn auth_provider(props: &AuthProviderProps) -> Html {
             <Redirect<Route> to={ Route::SignIn } />
         )
     } else if store.auth.token.is_some() && store.auth.user.is_none() {
-        let store = store.clone();
-
-        let api = api.clone();
-
         spawn_local(async move {
             let user = api.profile().await;
 

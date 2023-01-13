@@ -13,11 +13,10 @@ pub struct UserRepo<'a> {
 
 impl<'a> UserRepo<'a> {
     pub async fn get_by_username(&self, username: &str) -> Result<Option<User>, RepositoryError> {
-        Ok(self
-            .get(|stmt| {
-                stmt.and_where(q::Expr::col(q::User::Username).eq(username));
-            })
-            .await?)
+        self.get(|stmt| {
+            stmt.and_where(q::Expr::col(q::User::Username).eq(username));
+        })
+        .await
     }
 }
 

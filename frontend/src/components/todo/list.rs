@@ -20,10 +20,6 @@ pub fn done_toggle(props: &DoneToggleProps) -> Html {
     let api = use_api();
 
     let onchange = {
-        let store = store.clone();
-
-        let api = api.clone();
-
         let props = props.clone();
 
         move |_| {
@@ -67,10 +63,6 @@ pub fn remove(props: &RemoveProps) -> Html {
     let api = use_api();
 
     let onclick = {
-        let store = store.clone();
-
-        let api = api.clone();
-
         let props = props.clone();
 
         move |_| {

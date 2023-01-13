@@ -21,7 +21,7 @@ pub fn sign_up() -> Html {
 
     let api = use_api();
 
-    let form = use_state(|| Form::default());
+    let form = use_state(Form::default);
 
     let onchange_username = {
         let form = form.clone();
@@ -50,10 +50,6 @@ pub fn sign_up() -> Html {
     };
 
     let onsubmit = {
-        let store = store.clone();
-
-        let api = api.clone();
-
         let form = form.clone();
 
         move |e: SubmitEvent| {
