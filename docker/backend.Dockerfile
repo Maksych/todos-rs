@@ -1,4 +1,4 @@
-FROM rust:slim-buster as build
+FROM rust:slim-buster as builder
 
 RUN apt update \
     && apt -y install pkg-config libssl-dev
@@ -9,11 +9,12 @@ COPY . .
 
 RUN cargo build --release
 
+
 FROM debian:buster-slim
 
 RUN apt update \
     && apt -y install libssl-dev
 
-COPY --from=build /app/target/release/backend /
+COPY --from=builder /app/target/release/backend /
 
 ENTRYPOINT [ "/backend" ]
