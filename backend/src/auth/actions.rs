@@ -41,7 +41,7 @@ pub async fn sign_up(db: &PgPool, username: &str, password: &str) -> Result<Toke
 
     let user = repo.insert(user).await?;
 
-    Ok(security::create_token(user).await?)
+    Ok(security::create_token(user.id).await?)
 }
 
 pub async fn sign_in(db: &PgPool, username: &str, password: &str) -> Result<Token, ActionError> {
@@ -54,7 +54,7 @@ pub async fn sign_in(db: &PgPool, username: &str, password: &str) -> Result<Toke
         return Err(ActionError::InvalidCredentials);
     }
 
-    Ok(security::create_token(user).await?)
+    Ok(security::create_token(user.id).await?)
 }
 
 pub async fn change_password(
@@ -87,7 +87,7 @@ pub async fn sign_refresh(db: &PgPool, token: String) -> Result<Token, ActionErr
 
     let user = get_user_by_id(db, &user_id).await?;
 
-    Ok(security::create_token(user).await?)
+    Ok(security::create_token(user.id).await?)
 }
 
 pub async fn get_user_by_id(db: &PgPool, id: &Uuid) -> Result<User, ActionError> {
