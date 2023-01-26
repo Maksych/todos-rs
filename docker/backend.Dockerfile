@@ -1,7 +1,7 @@
 FROM rust:slim-buster as builder
 
 RUN apt update \
-    && apt -y install pkg-config libssl-dev
+    && apt install -y pkg-config libssl-dev
 
 WORKDIR /app
 
