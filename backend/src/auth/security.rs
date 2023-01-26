@@ -7,8 +7,6 @@ use thiserror::Error;
 use tokio::task::{self, JoinError};
 use uuid::Uuid;
 
-use super::models::User;
-
 static ACCESS_EXPIRE_SECONDS: u64 = 60 * 15;
 static REFRESH_EXPIRE_SECONDS: u64 = 60 * 60 * 24;
 
@@ -72,13 +70,13 @@ pub enum Audience {
     Refresh,
 }
 
-pub async fn create_token(user: User) -> Result<Token, SecurityError> {
+pub async fn create_token(user_id: Uuid) -> Result<Token, SecurityError> {
     task::spawn_blocking(move || {
         let header = jwt::Header::default();
 
-        let access_claims = Claims::new(user.id, Audience::Access, ACCESS_EXPIRE_SECONDS);
+        let access_claims = Claims::new(user_id, Audience::Access, ACCESS_EXPIRE_SECONDS);
 
-        let refresh_claims = Claims::new(user.id, Audience::Refresh, REFRESH_EXPIRE_SECONDS);
+        let refresh_claims = Claims::new(user_id, Audience::Refresh, REFRESH_EXPIRE_SECONDS);
 
         let key = get_encoding_key()?;
 
