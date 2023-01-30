@@ -10,7 +10,7 @@ use tracing::Level;
 
 use crate::database;
 
-use super::api;
+use super::{api, swagger};
 
 pub async fn create_app() -> anyhow::Result<Router> {
     let trace_layer = TraceLayer::new_for_http()
@@ -26,8 +26,11 @@ pub async fn create_app() -> anyhow::Result<Router> {
 
     let api_router = api::create_router().await?;
 
+    let swagger_router = swagger::create_router().await?;
+
     let app = Router::new()
         .nest("/api", api_router)
+        .nest("/swagger", swagger_router)
         .layer(trace_layer)
         .layer(cors_layer)
         .layer(Extension(db));

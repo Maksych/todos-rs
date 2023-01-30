@@ -1,0 +1,387 @@
+openapi: "3.0.0"
+
+info:
+  title: Todos
+  version: "1.0"
+
+servers:
+  - url: http://localhost:8080/api/v1
+
+components:
+  schemas:
+    Credentials:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+      required:
+        - username
+        - password
+
+    Token:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+      required:
+        - access
+        - refresh
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        joined_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - username
+        - joined_at
+
+    ChangePassword:
+      type: object
+      properties:
+        password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+      required:
+        - password
+        - new_password
+
+    Todo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        is_done:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        done_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user_id
+        - name
+        - is_done
+        - created_at
+        - updated_at
+        - done_at
+
+    TodoList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Todo"
+
+    TodoListPaginated:
+      type: array
+      items:
+        type: object
+        properties:
+          data:
+            $ref: "#/components/schemas/TodoList"
+          count:
+            type: integer
+        required:
+          - data
+          - count
+
+    NewTodo:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    UnauthorizedError:
+      description: Unauthorized
+
+    ForbiddenError:
+      description: Forbidden
+
+    NotFoundError:
+      description: Not Found
+
+    InternalServerError:
+      description: Internal Server Error
+
+tags:
+  - name: auth
+  - name: todos
+
+paths:
+  /sign-in:
+    post:
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+
+  /sign-up:
+    post:
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+
+  /sign-refresh:
+    post:
+      tags:
+        - auth
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+
+  /profile:
+    get:
+      tags:
+        - auth
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /change-password:
+    post:
+      tags:
+        - auth
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePassword"
+      responses:
+        "204":
+          description: NO CONTENT
+
+  /todos:
+    get:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodoListPaginated"
+
+    post:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewTodo"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+
+  /todos-active:
+    get:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodoListPaginated"
+
+  /todos-completed:
+    get:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodoListPaginated"
+
+  /todos/{id}:
+    get:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+
+    patch:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewTodo"
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+
+    delete:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+      responses:
+        "204":
+          description: No Content
+
+  /todos/{id}/done:
+    post:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+
+  /todos/{id}/revert:
+    post:
+      tags:
+        - todos
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
