@@ -8,6 +8,15 @@ servers:
   - url: http://localhost:8080/api/v1
 
 components:
+  parameters:
+    PathId:
+      name: id
+      in: path
+      schema:
+        type: string
+        format: uuid
+      required: true
+
   schemas:
     Credentials:
       type: object
@@ -289,12 +298,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
-          in: path
-          schema:
-            type: string
-            format: uuid
-          required: true
+        - $ref: "#/components/parameters/PathId"
       responses:
         "200":
           description: Ok
@@ -309,12 +313,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
-          in: path
-          schema:
-            type: string
-            format: uuid
-          required: true
+        - $ref: "#/components/parameters/PathId"
       requestBody:
         content:
           application/json:
@@ -334,12 +333,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
-          in: path
-          schema:
-            type: string
-            format: uuid
-          required: true
+        - $ref: "#/components/parameters/PathId"
       responses:
         "204":
           description: No Content
@@ -351,12 +345,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
-          in: path
-          schema:
-            type: string
-            format: uuid
-          required: true
+        - $ref: "#/components/parameters/PathId"
       responses:
         "200":
           description: Ok
@@ -372,12 +361,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
-          in: path
-          schema:
-            type: string
-            format: uuid
-          required: true
+        - $ref: "#/components/parameters/PathId"
       responses:
         "200":
           description: Ok
