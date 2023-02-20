@@ -1,18 +1,26 @@
-use axum::{response::Html, routing::get, Json, Router};
+use axum::{
+    http::header,
+    response::{Html, IntoResponse},
+    routing::get,
+    Router,
+};
 
 static SWAGGER_HTML: &str = include_str!("../../swagger/index.html");
 
 static OPENAPI_YAML: &str = include_str!("../../swagger/openapi.yaml");
 
-pub async fn create_router() -> Result<Router, anyhow::Error> {
-    let openapi_json = serde_yaml::from_str::<serde_json::Value>(OPENAPI_YAML)?;
+async fn swagger_ui() -> impl IntoResponse {
+    Html(SWAGGER_HTML)
+}
 
+async fn openapi_yaml() -> impl IntoResponse {
+    ([(header::CONTENT_TYPE, "application/yaml")], OPENAPI_YAML)
+}
+
+pub async fn create_router() -> Result<Router, anyhow::Error> {
     let router = Router::new()
-        .route("/", get(|| async { Html(SWAGGER_HTML) }))
-        .route(
-            "/openapi.json",
-            get(move || async move { Json(openapi_json) }),
-        );
+        .route("/", get(swagger_ui))
+        .route("/openapi.yaml", get(openapi_yaml));
 
     Ok(router)
 }

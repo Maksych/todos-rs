@@ -1,14 +1,31 @@
-use std::env::{self, VarError};
+use std::env;
 
 use bcrypt::BcryptError;
 use jsonwebtoken as jwt;
+use once_cell::sync;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::task::{self, JoinError};
 use uuid::Uuid;
 
-static ACCESS_EXPIRE_SECONDS: u64 = 60 * 15;
-static REFRESH_EXPIRE_SECONDS: u64 = 60 * 60 * 24;
+pub static SECRET: sync::Lazy<String> =
+    sync::Lazy::new(|| env::var("SECRET").expect("Environment variable \"SECRET\" not found"));
+
+pub static ACCESS_EXPIRE_SECONDS: sync::Lazy<u64> =
+    sync::Lazy::new(|| match env::var("ACCESS_EXPIRE_SECONDS") {
+        Ok(value) => value
+            .parse::<u64>()
+            .expect("Environment variable \"ACCESS_EXPIRE_SECONDS\" is not integer"),
+        Err(_) => 60 * 15,
+    });
+
+pub static REFRESH_EXPIRE_SECONDS: sync::Lazy<u64> =
+    sync::Lazy::new(|| match env::var("REFRESH_EXPIRE_SECONDS") {
+        Ok(value) => value
+            .parse::<u64>()
+            .expect("Environment variable \"REFRESH_EXPIRE_SECONDS\" is not integer"),
+        Err(_) => 60 * 60 * 24,
+    });
 
 #[derive(Debug, Error)]
 pub enum SecurityError {
@@ -16,8 +33,6 @@ pub enum SecurityError {
     Bcrypt(#[from] BcryptError),
     #[error("Join {0}")]
     Join(#[from] JoinError),
-    #[error("Var: {0}")]
-    Var(#[from] VarError),
     #[error("Jwt: {0}")]
     Jwt(#[from] jsonwebtoken::errors::Error),
     #[error("JwtInvalidAudience")]
@@ -74,11 +89,11 @@ pub async fn create_token(user_id: Uuid) -> Result<Token, SecurityError> {
     task::spawn_blocking(move || {
         let header = jwt::Header::default();
 
-        let access_claims = Claims::new(user_id, Audience::Access, ACCESS_EXPIRE_SECONDS);
+        let access_claims = Claims::new(user_id, Audience::Access, *ACCESS_EXPIRE_SECONDS);
 
-        let refresh_claims = Claims::new(user_id, Audience::Refresh, REFRESH_EXPIRE_SECONDS);
+        let refresh_claims = Claims::new(user_id, Audience::Refresh, *REFRESH_EXPIRE_SECONDS);
 
-        let key = get_encoding_key()?;
+        let key = jwt::EncodingKey::from_secret(SECRET.as_bytes());
 
         Ok(Token {
             access: jwt::encode(&header, &access_claims, &key)?,
@@ -88,15 +103,9 @@ pub async fn create_token(user_id: Uuid) -> Result<Token, SecurityError> {
     .await?
 }
 
-pub fn get_encoding_key() -> Result<jwt::EncodingKey, SecurityError> {
-    let secret = env::var("SECRET")?;
-
-    Ok(jwt::EncodingKey::from_secret(secret.as_bytes()))
-}
-
 pub async fn verify_token(token: String, aud: Audience) -> Result<Uuid, SecurityError> {
     task::spawn_blocking(move || {
-        let key = get_decoding_key()?;
+        let key = jwt::DecodingKey::from_secret(SECRET.as_bytes());
 
         let validation = jwt::Validation::default();
 
@@ -109,12 +118,6 @@ pub async fn verify_token(token: String, aud: Audience) -> Result<Uuid, Security
         }
     })
     .await?
-}
-
-pub fn get_decoding_key() -> Result<jwt::DecodingKey, SecurityError> {
-    let secret = env::var("SECRET")?;
-
-    Ok(jwt::DecodingKey::from_secret(secret.as_bytes()))
 }
 
 pub async fn verify_access_token(token: String) -> Result<Uuid, SecurityError> {
