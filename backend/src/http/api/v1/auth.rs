@@ -27,6 +27,15 @@ pub enum HandlerError {
     Validation(#[from] validator::ValidationErrors),
 }
 
+impl IntoResponse for HandlerError {
+    fn into_response(self) -> Response {
+        match self {
+            HandlerError::Action(inner) => action_into_response(inner),
+            HandlerError::Validation(inner) => validation_into_response(inner),
+        }
+    }
+}
+
 fn action_into_response(error: ActionError) -> Response {
     match error {
         ActionError::Repository(inner) => repo_into_response(inner),
@@ -59,15 +68,6 @@ fn security_into_response(error: SecurityError) -> Response {
         _ => {
             tracing::error!("{}", error);
             (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
-        }
-    }
-}
-
-impl IntoResponse for HandlerError {
-    fn into_response(self) -> Response {
-        match self {
-            HandlerError::Action(inner) => action_into_response(inner),
-            HandlerError::Validation(inner) => validation_into_response(inner),
         }
     }
 }

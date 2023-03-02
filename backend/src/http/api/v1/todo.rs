@@ -25,6 +25,15 @@ pub enum HandlerError {
     Validation(#[from] validator::ValidationErrors),
 }
 
+impl IntoResponse for HandlerError {
+    fn into_response(self) -> Response {
+        match self {
+            HandlerError::Action(inner) => action_into_response(inner),
+            HandlerError::Validation(inner) => validation_into_response(inner),
+        }
+    }
+}
+
 fn action_into_response(error: ActionError) -> Response {
     match error {
         ActionError::Repository(inner) => repo_into_response(inner),
@@ -43,15 +52,6 @@ fn validation_into_response(error: validator::ValidationErrors) -> Response {
     (StatusCode::UNPROCESSABLE_ENTITY, Json(error)).into_response()
 }
 
-impl IntoResponse for HandlerError {
-    fn into_response(self) -> Response {
-        match self {
-            HandlerError::Action(inner) => action_into_response(inner),
-            HandlerError::Validation(inner) => validation_into_response(inner),
-        }
-    }
-}
-
 #[derive(Serialize)]
 pub struct Paginated<T>
 where
@@ -68,7 +68,7 @@ pub struct NewTodo {
 }
 
 #[derive(Deserialize, Validate)]
-pub struct RenameTodo {
+pub struct UpdateTodo {
     #[validate(length(min = 5, message = "Too short"))]
     pub name: String,
 }
@@ -154,7 +154,7 @@ pub async fn update_todo(
     Extension(db): Extension<PgPool>,
     user: AuthUser,
     Path(id): Path<Uuid>,
-    Json(payload): Json<RenameTodo>,
+    Json(payload): Json<UpdateTodo>,
 ) -> Result<impl IntoResponse, HandlerError> {
     payload.validate()?;
 
