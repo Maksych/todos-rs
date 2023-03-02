@@ -3,9 +3,8 @@ use sea_query_binder::SqlxBinder;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use crate::repository::{Repository, RepositoryError};
-
 use super::{models::User, query as q};
+use crate::repository::{Repository, RepositoryError};
 
 pub struct UserRepo<'a> {
     db: &'a PgPool,
@@ -110,11 +109,27 @@ impl<'a> Repository<'a> for UserRepo<'a> {
         Ok(item)
     }
 
-    async fn delete(&self, item: Self::Model) -> Result<(), RepositoryError> {
+    async fn delete_by_id(&self, id: &Uuid) -> Result<(), RepositoryError> {
         let (sql, values) = q::Query::delete()
             .from_table(q::User::Table)
-            .and_where(q::Expr::col(q::User::Id).eq(item.id))
+            .and_where(q::Expr::col(q::User::Id).eq(*id))
             .build_sqlx(q::PostgresQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(self.db).await?;
+
+        Ok(())
+    }
+
+    async fn delete<F>(&self, f: F) -> Result<(), RepositoryError>
+    where
+        F: FnOnce(&mut q::DeleteStatement) + Send,
+    {
+        let mut stmt = q::Query::delete();
+        stmt.from_table(q::User::Table);
+
+        f(&mut stmt);
+
+        let (sql, values) = stmt.build_sqlx(q::PostgresQueryBuilder);
 
         sqlx::query_with(&sql, values).execute(self.db).await?;
 

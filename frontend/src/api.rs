@@ -1,171 +1,224 @@
-use gloo_net::http::{Method, Request};
-use serde::Deserialize;
-use serde_json::json;
+use reqwest::{Client, RequestBuilder, Response, StatusCode};
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 use uuid::Uuid;
 use yew::prelude::*;
+use yewdux::prelude::*;
 
-use crate::store::{use_store, StoreContext, Todo, Token, User};
+use self::{
+    error::ApiError,
+    types::{Credentials, NewTodo, Paginated, RenameTodo, Todo, TodosDeleteQuery, TodosQuery},
+};
+use crate::store::{Action, Store, Token, User};
 
-#[derive(Debug, Clone)]
+pub mod error;
+pub mod ext;
+pub mod types;
+
+static BASE_URL: &str = env!("BASE_URL");
+
+pub type ApiResult<T> = Result<T, ApiError>;
+
+#[derive(Clone)]
 pub struct Api {
-    pub base_url: String,
-    pub store: StoreContext,
+    pub token: Option<Token>,
+}
+
+macro_rules! impl_methods {
+    ($(($method:ident, $method_with_auth:ident),)+) => {
+        $(
+            fn $method(&self, url: &str) -> RequestBuilder {
+                Client::new().$method(format!("{BASE_URL}{url}"))
+            }
+
+            async fn $method_with_auth(&self, url: &str) -> ApiResult<RequestBuilder> {
+                self.try_auth(self.$method(url)).await
+            }
+        )+
+    };
 }
 
 impl Api {
-    pub fn new(base_url: String, store: StoreContext) -> Self {
-        Self { base_url, store }
+    fn new(token: Option<Token>) -> Self {
+        Self { token }
     }
 
-    pub fn request(&self, url: &str) -> Request {
-        let url = self.base_url.clone() + url;
+    impl_methods!(
+        (get, get_with_auth),
+        (post, post_with_auth),
+        (patch, patch_with_auth),
+        (delete, delete_with_auth),
+    );
 
-        Request::new(&url)
+    async fn try_auth(&self, builder: RequestBuilder) -> ApiResult<RequestBuilder> {
+        let token = &self
+            .token
+            .as_ref()
+            .ok_or_else(|| ApiError::Unauthorized("Unauthorized".to_string()))?;
+
+        if !token.access_claims.as_ref().unwrap().is_expired() {
+            Ok(builder.bearer_auth(&token.access))
+        } else if !token.refresh_claims.as_ref().unwrap().is_expired() {
+            let token = self.sign_refresh().await?;
+
+            Store::dispatch(Action::SetToken(Some(token.clone())));
+
+            Ok(builder.bearer_auth(&token.access))
+        } else {
+            Err(ApiError::TokenExpired)
+        }
     }
 
-    pub fn request_with_auth(&self, url: &str) -> Request {
-        let token = (*self.store).clone().auth.token.unwrap().access;
-
-        self.request_with_token(url, &token)
+    async fn json<T>(response: Response) -> ApiResult<T>
+    where
+        T: DeserializeOwned,
+    {
+        match response.status() {
+            StatusCode::OK | StatusCode::CREATED => Ok(response.json::<T>().await?),
+            StatusCode::BAD_REQUEST => Err(ApiError::BadRequest(response.text().await?)),
+            StatusCode::UNAUTHORIZED => Err(ApiError::Unauthorized(response.text().await?)),
+            StatusCode::FORBIDDEN => Err(ApiError::Forbidden(response.text().await?)),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(ApiError::UnprocessableEntity(
+                response.json::<Value>().await?,
+            )),
+            _ => Err(ApiError::Reqwest(response.text().await?)),
+        }
     }
 
-    pub fn request_with_token(&self, url: &str, token: &str) -> Request {
-        self.request(url)
-            .header("Authorization", &format!("Bearer {}", token))
+    async fn text(response: Response) -> ApiResult<String> {
+        match response.status() {
+            StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => {
+                Ok(response.text().await?)
+            }
+            StatusCode::BAD_REQUEST => Err(ApiError::BadRequest(response.text().await?)),
+            StatusCode::UNAUTHORIZED => Err(ApiError::Unauthorized(response.text().await?)),
+            StatusCode::FORBIDDEN => Err(ApiError::Forbidden(response.text().await?)),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(ApiError::UnprocessableEntity(
+                response.json::<Value>().await?,
+            )),
+            _ => Err(ApiError::Reqwest(response.text().await?)),
+        }
     }
 
-    pub async fn sign_up(&self, username: &str, password: &str) -> Token {
-        self.request("sign-up")
-            .method(Method::POST)
-            .json(&json!({"username": username, "password": password}))
-            .unwrap()
+    pub async fn profile(&self) -> ApiResult<User> {
+        let response = self.get_with_auth("/profile").await?.send().await?;
+
+        Api::json(response).await
+    }
+
+    pub async fn sign_in(&self, credentials: Credentials) -> ApiResult<Token> {
+        let response = self.post("/sign-in").json(&credentials).send().await?;
+
+        Api::json(response).await
+    }
+
+    pub async fn sign_up(&self, credentials: Credentials) -> ApiResult<Token> {
+        let response = self.post("/sign-up").json(&credentials).send().await?;
+
+        Api::json(response).await
+    }
+
+    pub async fn sign_refresh(&self) -> ApiResult<Token> {
+        let response = match &self.token {
+            Some(token) => {
+                self.post("/sign-refresh")
+                    .bearer_auth(&token.refresh)
+                    .send()
+                    .await?
+            }
+            None => return Err(ApiError::TokenExpired),
+        };
+
+        Api::json(response).await
+    }
+
+    pub async fn todos(&self, query: TodosQuery) -> ApiResult<Paginated<Todo>> {
+        let response = self
+            .get_with_auth("/todos")
+            .await?
+            .query(&query)
             .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
+            .await?;
+
+        Api::json(response).await
     }
 
-    pub async fn sign_in(&self, username: &str, password: &str) -> Token {
-        self.request("sign-in")
-            .method(Method::POST)
-            .json(&json!({"username": username, "password": password}))
-            .unwrap()
+    pub async fn new_todo(&self, todo: NewTodo) -> ApiResult<Todo> {
+        let response = self
+            .post_with_auth("/todos")
+            .await?
+            .json(&todo)
             .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
+            .await?;
+
+        Api::json(response).await
     }
 
-    pub async fn profile(&self) -> User {
-        self.request_with_auth("profile")
+    pub async fn delete_todos(&self, query: TodosDeleteQuery) -> ApiResult<String> {
+        let response = self
+            .delete_with_auth("/todos")
+            .await?
+            .query(&query)
             .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
+            .await?;
+
+        Api::text(response).await
     }
 
-    pub async fn profile_with_token(&self, token: &str) -> User {
-        self.request_with_token("profile", token)
+    pub async fn get_todo(&self, id: Uuid) -> ApiResult<Todo> {
+        let response = self
+            .get_with_auth(&format!("/todos/{id}"))
+            .await?
             .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
+            .await?;
+
+        Api::json(response).await
     }
 
-    pub async fn get_todos(&self) -> Vec<Todo> {
-        self.request_with_auth("todos")
+    pub async fn update_todo(&self, id: Uuid, todo: RenameTodo) -> ApiResult<Todo> {
+        let response = self
+            .patch_with_auth(&format!("/todos/{id}"))
+            .await?
+            .json(&todo)
             .send()
-            .await
-            .unwrap()
-            .json::<Paginated<Todo>>()
-            .await
-            .unwrap()
-            .data
+            .await?;
+
+        Api::json(response).await
     }
 
-    pub async fn get_active_todos(&self) -> Vec<Todo> {
-        self.request_with_auth("todos-active")
+    pub async fn delete_todo(&self, id: Uuid) -> ApiResult<()> {
+        self.delete_with_auth(&format!("/todos/{id}"))
+            .await?
             .send()
-            .await
-            .unwrap()
-            .json::<Paginated<Todo>>()
-            .await
-            .unwrap()
-            .data
+            .await?;
+
+        Ok(())
     }
 
-    pub async fn get_completed_todos(&self) -> Vec<Todo> {
-        self.request_with_auth("todos-completed")
+    pub async fn complete_todo(&self, id: Uuid) -> ApiResult<Todo> {
+        let response = self
+            .post_with_auth(&format!("/todos/{id}/complete"))
+            .await?
             .send()
-            .await
-            .unwrap()
-            .json::<Paginated<Todo>>()
-            .await
-            .unwrap()
-            .data
+            .await?;
+
+        Api::json(response).await
     }
 
-    pub async fn add_todo(&self, name: &str) -> Todo {
-        self.request_with_auth("todos")
-            .method(Method::POST)
-            .json(&json!({ "name": name }))
-            .unwrap()
+    pub async fn revert_todo(&self, id: Uuid) -> ApiResult<Todo> {
+        let response = self
+            .post_with_auth(&format!("/todos/{id}/revert"))
+            .await?
             .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
-    }
+            .await?;
 
-    pub async fn done_todo(&self, id: Uuid) -> Todo {
-        self.request_with_auth(&format!("todos/{}/done", id))
-            .method(Method::POST)
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
-    }
-
-    pub async fn revert_todo(&self, id: Uuid) -> Todo {
-        self.request_with_auth(&format!("todos/{}/revert", id))
-            .method(Method::POST)
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
-    }
-
-    pub async fn remove_todo(&self, id: Uuid) {
-        self.request_with_auth(&format!("todos/{}", id))
-            .method(Method::DELETE)
-            .send()
-            .await
-            .unwrap();
+        Api::json(response).await
     }
 }
 
 #[hook]
 pub fn use_api() -> Api {
-    let store = use_store();
+    let token = use_selector(|store: &Store| store.token.clone());
 
-    Api::new("http://127.0.0.1:8080/api/v1/".to_owned(), store)
-}
-
-#[derive(Deserialize)]
-pub struct Paginated<T> {
-    pub data: Vec<T>,
-    pub count: usize,
+    Api::new(token.as_ref().clone())
 }

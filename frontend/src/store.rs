@@ -1,163 +1,210 @@
-use std::rc::Rc;
+use std::collections::VecDeque;
 
-use chrono::{DateTime, Utc};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use chrono::{DateTime, TimeZone, Utc};
 use gloo_storage::{LocalStorage, Storage};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use yew::prelude::*;
+use yewdux::prelude::*;
 
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Store)]
 pub struct Store {
-    pub auth: Auth,
-    pub todos: Vec<Todo>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
-pub struct Auth {
+    pub alerts: VecDeque<Alert>,
     pub token: Option<Token>,
     pub user: Option<User>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
-pub struct Token {
-    pub access: String,
-    pub refresh: String,
+impl Default for Store {
+    fn default() -> Self {
+        Self {
+            alerts: VecDeque::new(),
+            token: LocalStorage::get::<Token>("token")
+                .ok().map(|token| token.with_claims()),
+            user: None,
+        }
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct Alert {
+    pub r#type: AlertType,
+    pub text: String,
+}
+
+impl Alert {
+    pub fn new(r#type: AlertType, text: &str) -> Self {
+        Self {
+            r#type,
+            text: text.to_string(),
+        }
+    }
+
+    pub fn new_error(text: &str) -> Self {
+        Self::new(AlertType::Error, text)
+    }
+
+    pub fn new_warning(text: &str) -> Self {
+        Self::new(AlertType::Warning, text)
+    }
+
+    pub fn new_success(text: &str) -> Self {
+        Self::new(AlertType::Success, text)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlertType {
+    Error,
+    Warning,
+    Success,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Token {
+    pub access: String,
+    pub access_claims: Option<Claims>,
+    pub refresh: String,
+    pub refresh_claims: Option<Claims>,
+}
+
+impl Token {
+    pub fn with_claims(self) -> Self {
+        Self {
+            access_claims: Some(Claims::from_token(self.access.clone())),
+            refresh_claims: Some(Claims::from_token(self.refresh.clone())),
+            ..self
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Claims {
+    pub exp: i64,
+    pub sub: Uuid,
+}
+
+impl Claims {
+    pub fn is_expired(&self) -> bool {
+        Utc.timestamp_opt(self.exp, 0).unwrap() < Utc::now()
+    }
+}
+
+impl Claims {
+    fn from_token(token: String) -> Self {
+        let decoded = URL_SAFE_NO_PAD
+            .decode(token.split('.').nth(1).unwrap())
+            .unwrap();
+
+        serde_json::from_slice(&decoded).unwrap()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct User {
     pub id: Uuid,
     pub username: String,
     pub joined_at: DateTime<Utc>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
-pub struct Todo {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub name: String,
-    pub is_done: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub done_at: Option<DateTime<Utc>>,
-}
-
 pub enum Action {
-    SetToken(Token),
-    SetUser(User),
-    SignUp { token: Token, user: User },
-    SignIn { token: Token, user: User },
-    SignRefresh { access: String, refresh: String },
-    SetTodos(Vec<Todo>),
+    SignIn(Token),
+    SignUp(Token),
     SignOut,
+    SignReject(String),
+    SetToken(Option<Token>),
+    SetUser(Option<User>),
+    Alert(Alert),
+    AlertSuccess(String),
+    AlertWarning(String),
+    AlertError(String),
+    PopAlert,
 }
 
-impl Reducible for Store {
-    type Action = Action;
+impl Store {
+    pub fn dispatch(action: Action) {
+        thread_local! {
+            static DISPATCH: Dispatch<Store> = Dispatch::<Store>::new();
+        };
 
-    fn reduce(self: Rc<Self>, action: Self::Action) -> Rc<Self> {
-        match action {
-            Action::SetToken(token) => Self {
-                auth: Auth {
-                    token: Some(token),
-                    user: None,
-                },
-                ..(*self).clone()
-            },
+        DISPATCH.with(|dispatch| {
+            dispatch.reduce_mut(|store| {
+                match action {
+                    Action::SignIn(token) => Store::sign_in(store, token),
+                    Action::SignUp(token) => Store::sign_up(store, token),
+                    Action::SignOut => Store::sign_out(store),
+                    Action::SignReject(text) => Store::sign_reject(store, text),
+                    Action::SetToken(token) => Store::set_token(store, token),
+                    Action::SetUser(user) => Store::set_user(store, user),
+                    Action::Alert(alert) => Store::alert(store, alert),
+                    Action::AlertSuccess(text) => Store::alert(store, Alert::new_success(&text)),
+                    Action::AlertWarning(text) => Store::alert(store, Alert::new_warning(&text)),
+                    Action::AlertError(text) => Store::alert(store, Alert::new_error(&text)),
+                    Action::PopAlert => Store::pop_alert(store),
+                };
+            });
+        });
+    }
 
-            Action::SetUser(user) => Self {
-                auth: Auth {
-                    token: self.auth.token.clone(),
-                    user: Some(user),
-                },
-                ..(*self).clone()
-            },
+    fn sign_in(store: &mut Store, token: Token) {
+        LocalStorage::set("token", &token).unwrap();
 
-            Action::SignIn { token, user } => {
-                LocalStorage::set("token", token.clone()).unwrap();
+        store.token = Some(token.with_claims());
 
-                Self {
-                    auth: Auth {
-                        token: Some(token),
-                        user: Some(user),
-                    },
-                    ..(*self).clone()
-                }
+        store.user = None;
+    }
+
+    fn sign_up(store: &mut Store, token: Token) {
+        LocalStorage::set("token", &token).unwrap();
+
+        store.token = Some(token.with_claims());
+
+        store.user = None;
+    }
+
+    fn sign_out(store: &mut Store) {
+        LocalStorage::delete("token");
+
+        store.token = None;
+
+        store.user = None;
+    }
+
+    fn sign_reject(store: &mut Store, text: String) {
+        LocalStorage::delete("token");
+
+        store.token = None;
+
+        store.user = None;
+
+        store.alerts.push_back(Alert::new_error(&text));
+    }
+
+    fn set_token(store: &mut Store, token: Option<Token>) {
+        store.token = match token {
+            Some(token) => {
+                LocalStorage::set("token", &token).unwrap();
+
+                Some(token.with_claims())
             }
-
-            Action::SignUp { token, user } => {
-                LocalStorage::set("token", token.clone()).unwrap();
-
-                Self {
-                    auth: Auth {
-                        token: Some(token),
-                        user: Some(user),
-                    },
-                    ..(*self).clone()
-                }
-            }
-
-            Action::SignRefresh { access, refresh } => {
-                let token = Token { access, refresh };
-
-                LocalStorage::set("token", token.clone()).unwrap();
-
-                Self {
-                    auth: Auth {
-                        token: Some(token),
-                        user: self.auth.user.clone(),
-                    },
-                    ..(*self).clone()
-                }
-            }
-
-            Action::SetTodos(todos) => Self {
-                todos,
-                ..(*self).clone()
-            },
-
-            Action::SignOut => {
+            None => {
                 LocalStorage::delete("token");
 
-                Self {
-                    auth: Auth {
-                        token: None,
-                        user: None,
-                    },
-                    ..(*self).clone()
-                }
+                store.user = None;
+
+                None
             }
-        }
-        .into()
+        };
     }
-}
 
-pub type StoreContext = UseReducerHandle<Store>;
+    fn set_user(store: &mut Store, user: Option<User>) {
+        store.user = user;
+    }
 
-#[hook]
-pub fn use_store() -> StoreContext {
-    use_context::<StoreContext>().unwrap()
-}
+    fn alert(store: &mut Store, alert: Alert) {
+        store.alerts.push_back(alert);
+    }
 
-#[derive(Properties, PartialEq)]
-pub struct StoreProviderProps {
-    pub children: Children,
-}
-
-#[function_component(StoreProvider)]
-pub fn store_provider(props: &StoreProviderProps) -> Html {
-    let store = use_reducer(|| {
-        let token: Option<Token> = LocalStorage::get("token").ok();
-
-        Store {
-            auth: Auth { token, user: None },
-            todos: Vec::new(),
-        }
-    });
-
-    html!(
-        <ContextProvider<StoreContext> context={ store }>
-            { props.children.clone() }
-        </ContextProvider<StoreContext>>
-    )
+    fn pop_alert(store: &mut Store) {
+        store.alerts.pop_front();
+    }
 }

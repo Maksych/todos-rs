@@ -8,8 +8,8 @@ pub struct Todo {
     pub id: Uuid,
     pub user_id: Uuid,
     pub name: String,
-    pub is_done: bool,
+    pub is_completed: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub done_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
 }

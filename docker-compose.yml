@@ -3,8 +3,8 @@ version: '3'
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: ../docker/backend.Dockerfile
+      context: ./
+      dockerfile: ./docker/backend.Dockerfile
     environment:
       - RUST_LOG=info
       - SECRET=1234567890123456789012345678901234567890123456789012345678901234
@@ -18,10 +18,21 @@ services:
     networks:
       - todos
 
+  frontend:
+    build:
+      context: ./
+      dockerfile: ./docker/frontend.Dockerfile
+      args:
+        - BASE_URL=http://127.0.0.1:8080/api/v1
+    environment:
+      - PORT=3080
+    ports:
+      - 3080:3080
+
   migrate:
     build:
-      context: ./backend
-      dockerfile: ../docker/migrate.Dockerfile
+      context: ./
+      dockerfile: ./docker/migrate.Dockerfile
     environment:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/postgres
     depends_on:

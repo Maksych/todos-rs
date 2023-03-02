@@ -17,6 +17,29 @@ components:
         format: uuid
       required: true
 
+    IsCompleted:
+      name: is_completed
+      in: query
+      schema:
+        type: boolean
+      required: false
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+      example: 10
+      required: false
+
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+      example: 0
+      required: false
+
   schemas:
     Credentials:
       type: object
@@ -81,7 +104,7 @@ components:
           format: uuid
         name:
           type: string
-        is_done:
+        is_completed:
           type: boolean
         created_at:
           type: string
@@ -89,17 +112,17 @@ components:
         updated_at:
           type: string
           format: date-time
-        done_at:
+        completed_at:
           type: string
           format: date-time
       required:
         - id
         - user_id
         - name
-        - is_done
+        - is_completed
         - created_at
         - updated_at
-        - done_at
+        - completed_at
 
     TodoList:
       type: array
@@ -235,6 +258,10 @@ paths:
     get:
       tags:
         - todos
+      parameters:
+        - $ref: "#/components/parameters/IsCompleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
       security:
         - BearerAuth: []
       responses:
@@ -262,34 +289,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Todo"
-
-  /todos-active:
-    get:
-      tags:
-        - todos
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Ok
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TodoListPaginated"
-
-  /todos-completed:
-    get:
-      tags:
-        - todos
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Ok
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TodoListPaginated"
 
   /todos/{id}:
     get:
@@ -338,7 +337,7 @@ paths:
         "204":
           description: No Content
 
-  /todos/{id}/done:
+  /todos/{id}/complete:
     post:
       tags:
         - todos

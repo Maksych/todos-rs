@@ -63,24 +63,30 @@ where
 
 #[derive(Deserialize, Validate)]
 pub struct NewTodo {
-    #[validate(length(min = 5))]
+    #[validate(length(min = 5, message = "Too short"))]
     pub name: String,
 }
 
 #[derive(Deserialize, Validate)]
 pub struct RenameTodo {
-    #[validate(length(min = 5))]
+    #[validate(length(min = 5, message = "Too short"))]
     pub name: String,
 }
 
 #[derive(Deserialize, Validate)]
 pub struct TodosQuery {
+    pub is_completed: Option<bool>,
     #[validate(range(min = 1, max = 25))]
     #[serde(default = "TodosQuery::default_limit")]
     pub limit: u64,
     #[validate(range(min = 0))]
     #[serde(default = "TodosQuery::default_offset")]
     pub offset: u64,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct TodosDeleteQuery {
+    pub is_completed: Option<bool>,
 }
 
 impl TodosQuery {
@@ -100,42 +106,28 @@ pub async fn get_todos(
 ) -> Result<impl IntoResponse, HandlerError> {
     query.validate()?;
 
-    let count = actions::get_todos_count(&db, &user.id, &query.limit, &query.offset).await?;
+    let count = actions::get_todos_count(&db, &user.id, query.is_completed).await?;
 
-    let data = actions::get_todos(&db, &user.id, &query.limit, &query.offset).await?;
-
-    Ok(Json(Paginated { data, count }))
-}
-
-pub async fn get_active_todos(
-    Extension(db): Extension<PgPool>,
-    user: AuthUser,
-    Query(query): Query<TodosQuery>,
-) -> Result<impl IntoResponse, HandlerError> {
-    query.validate()?;
-
-    let count =
-        actions::get_todos_count_by_done(&db, &user.id, false, &query.limit, &query.offset).await?;
-
-    let data =
-        actions::get_todos_by_done(&db, &user.id, false, &query.limit, &query.offset).await?;
+    let data = actions::get_todos(
+        &db,
+        &user.id,
+        query.is_completed,
+        &query.limit,
+        &query.offset,
+    )
+    .await?;
 
     Ok(Json(Paginated { data, count }))
 }
 
-pub async fn get_completed_todos(
+pub async fn delete_todos(
     Extension(db): Extension<PgPool>,
     user: AuthUser,
     Query(query): Query<TodosQuery>,
 ) -> Result<impl IntoResponse, HandlerError> {
-    query.validate()?;
+    actions::delete_todos(&db, &user.id, query.is_completed).await?;
 
-    let count =
-        actions::get_todos_count_by_done(&db, &user.id, true, &query.limit, &query.offset).await?;
-
-    let data = actions::get_todos_by_done(&db, &user.id, true, &query.limit, &query.offset).await?;
-
-    Ok(Json(Paginated { data, count }))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn create_todo(
@@ -158,7 +150,7 @@ pub async fn get_todo(
     Ok(Json(actions::get_todo(&db, &user.id, &id).await?))
 }
 
-pub async fn rename_todo(
+pub async fn update_todo(
     Extension(db): Extension<PgPool>,
     user: AuthUser,
     Path(id): Path<Uuid>,
@@ -167,24 +159,8 @@ pub async fn rename_todo(
     payload.validate()?;
 
     Ok(Json(
-        actions::rename_todo(&db, &user.id, &id, &payload.name).await?,
+        actions::update_todo(&db, &user.id, &id, &payload.name).await?,
     ))
-}
-
-pub async fn done_todo(
-    Extension(db): Extension<PgPool>,
-    user: AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, HandlerError> {
-    Ok(Json(actions::done_todo(&db, &user.id, &id).await?))
-}
-
-pub async fn revert_todo(
-    Extension(db): Extension<PgPool>,
-    user: AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, HandlerError> {
-    Ok(Json(actions::revert_todo(&db, &user.id, &id).await?))
 }
 
 pub async fn delete_todo(
@@ -197,15 +173,32 @@ pub async fn delete_todo(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn complete_todo(
+    Extension(db): Extension<PgPool>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, HandlerError> {
+    Ok(Json(actions::complete_todo(&db, &user.id, &id).await?))
+}
+
+pub async fn revert_todo(
+    Extension(db): Extension<PgPool>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, HandlerError> {
+    Ok(Json(actions::revert_todo(&db, &user.id, &id).await?))
+}
+
 pub async fn create_router() -> anyhow::Result<Router> {
     Ok(Router::new()
-        .route("/todos", get(get_todos).post(create_todo))
-        .route("/todos-active", get(get_active_todos))
-        .route("/todos-completed", get(get_completed_todos))
+        .route(
+            "/todos",
+            get(get_todos).post(create_todo).delete(delete_todos),
+        )
         .route(
             "/todos/:id",
-            get(get_todo).patch(rename_todo).delete(delete_todo),
+            get(get_todo).patch(update_todo).delete(delete_todo),
         )
-        .route("/todos/:id/done", post(done_todo))
+        .route("/todos/:id/complete", post(complete_todo))
         .route("/todos/:id/revert", post(revert_todo)))
 }

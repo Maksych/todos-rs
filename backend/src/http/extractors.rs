@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use axum::{
     extract::FromRequestParts,
     headers::{authorization::Bearer, Authorization},
@@ -18,7 +19,7 @@ pub struct AuthUser {
     pub joined_at: DateTime<Utc>,
 }
 
-#[axum::async_trait]
+#[async_trait]
 impl<S> FromRequestParts<S> for AuthUser
 where
     S: Send + Sync,
@@ -32,24 +33,35 @@ where
         let TypedHeader(Authorization(token)) =
             TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
                 .await
-                .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid token"))?;
+                .map_err(|err| {
+                    tracing::error!("{err}");
 
-        let Extension(db) = Extension::<PgPool>::from_request_parts(parts, state)
-            .await
-            .map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Error from request db pool",
-                )
-            })?;
+                    (StatusCode::BAD_REQUEST, "Invalid token")
+                })?;
 
         let user_id = security::verify_access_token(token.token().to_owned())
             .await
-            .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid or expired token"))?;
+            .map_err(|err| {
+                tracing::error!("{err}");
+
+                (StatusCode::UNAUTHORIZED, "Invalid or expired token")
+            })?;
+
+        let Extension(db) = Extension::<PgPool>::from_request_parts(parts, state)
+            .await
+            .map_err(|err| {
+                tracing::error!("{err}");
+
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+            })?;
 
         let user = actions::get_user_by_id(&db, &user_id)
             .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Error get user by id"))?;
+            .map_err(|err| {
+                tracing::error!("{err}");
+
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+            })?;
 
         Ok(Self {
             id: user.id,

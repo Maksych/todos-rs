@@ -6,8 +6,8 @@ pub enum Todo {
     Id,
     UserId,
     Name,
-    IsDone,
+    IsCompleted,
     CreatedAt,
     UpdatedAt,
-    DoneAt,
+    CompletedAt,
 }

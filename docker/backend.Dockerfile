@@ -1,19 +1,19 @@
-FROM rust:slim-buster as builder
+FROM rust:alpine as builder
 
-RUN apt update \
-    && apt install -y pkg-config libssl-dev
+RUN apk update \
+    && apk add pkgconfig musl-dev openssl-dev
 
 WORKDIR /app
 
-COPY . .
+COPY backend .
 
 RUN cargo build --release
 
 
-FROM debian:buster-slim
+FROM alpine
 
-RUN apt update \
-    && apt -y install libssl-dev
+RUN apk update \
+    && apk add openssl-dev
 
 COPY --from=builder /app/target/release/backend /
 

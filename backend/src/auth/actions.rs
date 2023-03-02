@@ -3,13 +3,12 @@ use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::repository::{Repository, RepositoryError};
-
 use super::{
     models::User,
     repository::UserRepo,
     security::{self, SecurityError, Token},
 };
+use crate::repository::{Repository, RepositoryError};
 
 #[derive(Debug, Error)]
 pub enum ActionError {

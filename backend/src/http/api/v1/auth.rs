@@ -74,9 +74,9 @@ impl IntoResponse for HandlerError {
 
 #[derive(Deserialize, Validate)]
 pub struct Credentials {
-    #[validate(length(min = 5))]
+    #[validate(length(min = 5, message = "Too short"))]
     pub username: String,
-    #[validate(length(min = 10))]
+    #[validate(length(min = 10, message = "Too short"))]
     pub password: String,
 }
 
@@ -88,9 +88,9 @@ pub struct Token {
 
 #[derive(Deserialize, Validate)]
 pub struct PasswordChange {
-    #[validate(length(min = 10))]
+    #[validate(length(min = 10, message = "Too short"))]
     pub password: String,
-    #[validate(length(min = 10))]
+    #[validate(length(min = 10, message = "Too short"))]
     pub new_password: String,
 }
 

@@ -11,6 +11,12 @@ use uuid::Uuid;
 pub static SECRET: sync::Lazy<String> =
     sync::Lazy::new(|| env::var("SECRET").expect("Environment variable \"SECRET\" not found"));
 
+pub static ENCODING_KEY: sync::Lazy<jwt::EncodingKey> =
+    sync::Lazy::new(|| jwt::EncodingKey::from_secret(SECRET.as_bytes()));
+
+pub static DECODING_KEY: sync::Lazy<jwt::DecodingKey> =
+    sync::Lazy::new(|| jwt::DecodingKey::from_secret(SECRET.as_bytes()));
+
 pub static ACCESS_EXPIRE_SECONDS: sync::Lazy<u64> =
     sync::Lazy::new(|| match env::var("ACCESS_EXPIRE_SECONDS") {
         Ok(value) => value
@@ -93,11 +99,9 @@ pub async fn create_token(user_id: Uuid) -> Result<Token, SecurityError> {
 
         let refresh_claims = Claims::new(user_id, Audience::Refresh, *REFRESH_EXPIRE_SECONDS);
 
-        let key = jwt::EncodingKey::from_secret(SECRET.as_bytes());
-
         Ok(Token {
-            access: jwt::encode(&header, &access_claims, &key)?,
-            refresh: jwt::encode(&header, &refresh_claims, &key)?,
+            access: jwt::encode(&header, &access_claims, &ENCODING_KEY)?,
+            refresh: jwt::encode(&header, &refresh_claims, &ENCODING_KEY)?,
         })
     })
     .await?
@@ -105,11 +109,9 @@ pub async fn create_token(user_id: Uuid) -> Result<Token, SecurityError> {
 
 pub async fn verify_token(token: String, aud: Audience) -> Result<Uuid, SecurityError> {
     task::spawn_blocking(move || {
-        let key = jwt::DecodingKey::from_secret(SECRET.as_bytes());
-
         let validation = jwt::Validation::default();
 
-        let token_data = jwt::decode::<Claims>(&token, &key, &validation)?;
+        let token_data = jwt::decode::<Claims>(&token, &DECODING_KEY, &validation)?;
 
         if token_data.claims.aud == aud {
             Ok(token_data.claims.sub)

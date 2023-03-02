@@ -1,40 +1,28 @@
 use yew::prelude::*;
+use yew_hooks::prelude::*;
 
-#[derive(Debug, Properties, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Properties)]
 pub struct ModalProps {
-    pub title: String,
-    pub is_show: UseStateHandle<bool>,
+    pub toggle: UseToggleHandle<bool>,
     pub children: Children,
 }
 
 #[function_component(Modal)]
 pub fn modal(props: &ModalProps) -> Html {
-    let close = {
-        let is_show = props.is_show.clone();
+    let toggle = {
+        let toggle = props.toggle.clone();
 
         move |_| {
-            is_show.set(false);
+            toggle.toggle();
         }
     };
 
     html!(
-        <>
-            <div class="modal-backdrop fade in show"></div>
-
-            <div class="modal fade d-block show">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">{ props.title.clone() }</h5>
-
-                            <button type="button" class="btn-close" onclick={close.clone()}></button>
-                        </div>
-                        <div class="modal-body">
-                            { for props.children.iter() }
-                        </div>
-                    </div>
-                </div>
+        <div class="modal modal-open ">
+            <div class="modal-box relative">
+                <button onclick={ toggle } class="btn btn-sm btn-circle absolute right-2 top-2">{ "✕" }</button>
+                { for props.children.iter() }
             </div>
-        </>
+        </div>
     )
 }

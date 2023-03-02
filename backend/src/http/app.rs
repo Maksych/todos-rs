@@ -8,9 +8,8 @@ use tower_http::{
 };
 use tracing::Level;
 
-use crate::database;
-
 use super::{api, swagger};
+use crate::database;
 
 pub async fn create_app() -> anyhow::Result<Router> {
     let trace_layer = TraceLayer::new_for_http()

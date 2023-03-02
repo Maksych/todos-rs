@@ -3,9 +3,8 @@ use sea_query_binder::SqlxBinder;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use crate::repository::{Repository, RepositoryError};
-
 use super::{models::Todo, query as q};
+use crate::repository::{Repository, RepositoryError};
 
 pub struct TodoRepo<'a> {
     db: &'a PgPool,
@@ -62,19 +61,19 @@ impl<'a> Repository<'a> for TodoRepo<'a> {
                 q::Todo::Id,
                 q::Todo::UserId,
                 q::Todo::Name,
-                q::Todo::IsDone,
+                q::Todo::IsCompleted,
                 q::Todo::CreatedAt,
                 q::Todo::UpdatedAt,
-                q::Todo::DoneAt,
+                q::Todo::CompletedAt,
             ])
             .values([
                 item.id.into(),
                 item.user_id.into(),
                 item.name.clone().into(),
-                item.is_done.into(),
+                item.is_completed.into(),
                 item.created_at.into(),
                 item.updated_at.into(),
-                item.done_at.into(),
+                item.completed_at.into(),
             ])?
             .build_sqlx(q::PostgresQueryBuilder);
 
@@ -96,10 +95,10 @@ impl<'a> Repository<'a> for TodoRepo<'a> {
             .values([
                 (q::Todo::UserId, item.user_id.into()),
                 (q::Todo::Name, item.name.clone().into()),
-                (q::Todo::IsDone, item.is_done.into()),
+                (q::Todo::IsCompleted, item.is_completed.into()),
                 (q::Todo::CreatedAt, item.created_at.into()),
                 (q::Todo::UpdatedAt, item.updated_at.into()),
-                (q::Todo::DoneAt, item.done_at.into()),
+                (q::Todo::CompletedAt, item.completed_at.into()),
             ])
             .and_where(q::Expr::col(q::Todo::Id).eq(item.id))
             .build_sqlx(q::PostgresQueryBuilder);
@@ -109,11 +108,27 @@ impl<'a> Repository<'a> for TodoRepo<'a> {
         Ok(item)
     }
 
-    async fn delete(&self, item: Self::Model) -> Result<(), RepositoryError> {
+    async fn delete_by_id(&self, id: &Uuid) -> Result<(), RepositoryError> {
         let (sql, values) = q::Query::delete()
             .from_table(q::Todo::Table)
-            .and_where(q::Expr::col(q::Todo::Id).eq(item.id))
+            .and_where(q::Expr::col(q::Todo::Id).eq(*id))
             .build_sqlx(q::PostgresQueryBuilder);
+
+        sqlx::query_with(&sql, values).execute(self.db).await?;
+
+        Ok(())
+    }
+
+    async fn delete<F>(&self, f: F) -> Result<(), RepositoryError>
+    where
+        F: FnOnce(&mut q::DeleteStatement) + Send,
+    {
+        let mut stmt = q::Query::delete();
+        stmt.from_table(q::Todo::Table);
+
+        f(&mut stmt);
+
+        let (sql, values) = stmt.build_sqlx(q::PostgresQueryBuilder);
 
         sqlx::query_with(&sql, values).execute(self.db).await?;
 

@@ -1,13 +1,19 @@
-FROM rust:slim-buster
+FROM rust:alpine as builder
 
-RUN apt update \
-    && apt install -y pkg-config libssl-dev
+RUN apk update \
+    && apk add pkgconfig musl-dev openssl-dev
 
 RUN cargo install sqlx-cli
 
-WORKDIR /app
 
-COPY ./migrations ./migrations
+FROM alpine
 
-CMD sqlx database create \
-    && sqlx migrate run
+RUN apk update \
+    && apk add openssl-dev
+
+COPY --from=builder  usr/local/cargo/bin/sqlx /
+
+COPY backend/migrations migrations
+
+CMD /sqlx database create \
+    && /sqlx migrate run

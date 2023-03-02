@@ -1,4 +1,4 @@
-# Todos app
+# ToDos
 
 The backend and frontend are written in [rust](https://github.com/rust-lang/rust) - a language empowering everyone to build reliable and efficient software.
 
@@ -17,3 +17,9 @@ The backend and frontend are written in [rust](https://github.com/rust-lang/rust
 ```bash
 docker compose up --build -d
 ```
+
+- backend - [http://127.0.0.1:8080/](http://127.0.0.1:8080/)
+
+- swagger - [http://127.0.0.1:8080/swagger](http://127.0.0.1:8080/swagger)
+
+- frontend - [http://127.0.0.1:3080/](http://127.0.0.1:3080/)
