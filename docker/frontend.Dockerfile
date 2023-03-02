@@ -31,7 +31,7 @@ ENV BASE_URL ${BASE_URL}
 RUN trunk build --release
 
 
-FROM nginx:alpine
+FROM nginx:alpine-slim
 
 WORKDIR /app
 
