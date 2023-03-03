@@ -8,9 +8,6 @@ RUN cargo install sqlx-cli
 
 FROM alpine
 
-RUN apk update \
-    && apk add openssl-dev
-
 COPY --from=builder  usr/local/cargo/bin/sqlx /
 
 COPY backend/migrations migrations

@@ -28,6 +28,8 @@ services:
       - PORT=3080
     ports:
       - 3080:3080
+    networks:
+      - todos
 
   migrate:
     build:
