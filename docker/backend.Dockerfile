@@ -5,6 +5,7 @@ RUN apk update \
 
 WORKDIR /app
 
+COPY .cargo .cargo
 COPY backend .
 
 RUN cargo build --release

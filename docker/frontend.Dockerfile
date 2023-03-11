@@ -20,8 +20,8 @@ RUN apk update \
 
 WORKDIR /app
 
+COPY .cargo .cargo
 COPY frontend .
-
 COPY --from=css_builder /app/output.css output.css
 
 ARG BASE_URL
