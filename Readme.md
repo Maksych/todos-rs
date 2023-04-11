@@ -5,8 +5,7 @@ The backend and frontend are written in [rust](https://github.com/rust-lang/rust
 ## Backend built with
 
 - [axum](https://github.com/tokio-rs/axum) - is a web application framework that focuses on ergonomics and modularity
-- [SQLx](https://github.com/launchbadge/sqlx) - SQLx is an async, pure Rust† SQL crate featuring compile-time checked queries without a DSL
-- [SeaQuery](https://github.com/SeaQL/sea-query) - A dynamic query builder for MySQL, Postgres and SQLite
+- [SeaORM](https://github.com/SeaQL/sea-orm) - an async & dynamic ORM for Rust
 
 ## Frontend built with
 
