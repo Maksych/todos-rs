@@ -6,8 +6,8 @@ use axum::{
     Extension, TypedHeader,
 };
 use chrono::{DateTime, Utc};
+use sea_orm::DatabaseConnection;
 use serde::Serialize;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::auth::{actions, security};
@@ -47,7 +47,7 @@ where
                 (StatusCode::UNAUTHORIZED, "Invalid or expired token")
             })?;
 
-        let Extension(db) = Extension::<PgPool>::from_request_parts(parts, state)
+        let Extension(db) = Extension::<DatabaseConnection>::from_request_parts(parts, state)
             .await
             .map_err(|err| {
                 tracing::error!("{err}");

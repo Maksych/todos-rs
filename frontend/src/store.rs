@@ -19,7 +19,8 @@ impl Default for Store {
         Self {
             alerts: VecDeque::new(),
             token: LocalStorage::get::<Token>("token")
-                .ok().map(|token| token.with_claims()),
+                .ok()
+                .map(|token| token.with_claims()),
             user: None,
         }
     }

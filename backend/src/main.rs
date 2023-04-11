@@ -3,7 +3,7 @@ use std::{env, net::SocketAddr};
 use backend::http;
 use once_cell::sync;
 
-pub static ADDR: sync::Lazy<SocketAddr> = sync::Lazy::new(|| {
+static ADDR: sync::Lazy<SocketAddr> = sync::Lazy::new(|| {
     env::var("ADDR")
         .expect("Environment variable \"ADDR\" not found")
         .parse::<SocketAddr>()

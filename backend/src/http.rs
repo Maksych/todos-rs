@@ -1,5 +1,5 @@
-mod api;
+pub mod api;
 pub mod app;
-mod extractors;
+pub mod extractors;
 pub mod server;
-mod swagger;
+pub mod swagger;

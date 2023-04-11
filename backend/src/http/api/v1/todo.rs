@@ -5,15 +5,14 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
+use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
     http::extractors::AuthUser,
-    repository::RepositoryError,
     todo::actions::{self, ActionError},
 };
 
@@ -36,13 +35,13 @@ impl IntoResponse for HandlerError {
 
 fn action_into_response(error: ActionError) -> Response {
     match error {
-        ActionError::Repository(inner) => repo_into_response(inner),
+        ActionError::Db(inner) => db_into_response(inner),
         ActionError::Forbidden => (StatusCode::FORBIDDEN, error.to_string()).into_response(),
         ActionError::NotFound => (StatusCode::NOT_FOUND, error.to_string()).into_response(),
     }
 }
 
-fn repo_into_response(error: RepositoryError) -> Response {
+fn db_into_response(error: DbErr) -> Response {
     tracing::error!("{}", error);
 
     (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
@@ -58,7 +57,7 @@ where
     T: Serialize,
 {
     pub data: Vec<T>,
-    pub count: i64,
+    pub count: u64,
 }
 
 #[derive(Deserialize, Validate)]
@@ -100,7 +99,7 @@ impl TodosQuery {
 }
 
 pub async fn get_todos(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Query(query): Query<TodosQuery>,
 ) -> Result<impl IntoResponse, HandlerError> {
@@ -121,7 +120,7 @@ pub async fn get_todos(
 }
 
 pub async fn delete_todos(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Query(query): Query<TodosQuery>,
 ) -> Result<impl IntoResponse, HandlerError> {
@@ -131,7 +130,7 @@ pub async fn delete_todos(
 }
 
 pub async fn create_todo(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Json(payload): Json<NewTodo>,
 ) -> Result<impl IntoResponse, HandlerError> {
@@ -143,7 +142,7 @@ pub async fn create_todo(
 }
 
 pub async fn get_todo(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, HandlerError> {
@@ -151,7 +150,7 @@ pub async fn get_todo(
 }
 
 pub async fn update_todo(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateTodo>,
@@ -164,7 +163,7 @@ pub async fn update_todo(
 }
 
 pub async fn delete_todo(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, HandlerError> {
@@ -174,7 +173,7 @@ pub async fn delete_todo(
 }
 
 pub async fn complete_todo(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, HandlerError> {
@@ -182,7 +181,7 @@ pub async fn complete_todo(
 }
 
 pub async fn revert_todo(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, HandlerError> {

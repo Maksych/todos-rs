@@ -1,18 +1,17 @@
 use chrono::Utc;
-use sqlx::PgPool;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel,
+    ModelTrait, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+};
 use thiserror::Error;
 use uuid::Uuid;
 
-use super::{models::Todo, query as q, repository::TodoRepo};
-use crate::{
-    auth::repository::UserRepo,
-    repository::{Repository, RepositoryError},
-};
+use crate::entities::{todo, user};
 
 #[derive(Debug, Error)]
 pub enum ActionError {
-    #[error("Repo: {0}")]
-    Repository(#[from] RepositoryError),
+    #[error("DbErr: {0}")]
+    Db(#[from] DbErr),
     #[error("Forbidden")]
     Forbidden,
     #[error("Not Found")]
@@ -20,83 +19,93 @@ pub enum ActionError {
 }
 
 pub async fn get_todos_count(
-    db: &PgPool,
+    db: &DatabaseConnection,
     user_id: &Uuid,
     is_completed: Option<bool>,
-) -> Result<i64, ActionError> {
-    Ok(TodoRepo::new(db)
-        .count(|stmt| {
-            stmt.and_where(q::Expr::col(q::Todo::UserId).eq(*user_id));
-            if let Some(is_completed) = is_completed {
-                stmt.and_where(q::Expr::col(q::Todo::IsCompleted).eq(is_completed));
-            }
-        })
-        .await?)
+) -> Result<u64, ActionError> {
+    let mut stmt = todo::Entity::find().filter(todo::Column::UserId.eq(*user_id));
+
+    if let Some(is_completed) = is_completed {
+        stmt = stmt.filter(todo::Column::IsCompleted.eq(is_completed));
+    }
+
+    Ok(stmt.count(db).await?)
 }
 
 pub async fn get_todos(
-    db: &PgPool,
+    db: &DatabaseConnection,
     user_id: &Uuid,
     is_completed: Option<bool>,
     limit: &u64,
     offset: &u64,
-) -> Result<Vec<Todo>, ActionError> {
-    Ok(TodoRepo::new(db)
-        .select(|stmt| {
-            stmt.and_where(q::Expr::col(q::Todo::UserId).eq(*user_id));
-            if let Some(is_completed) = is_completed {
-                stmt.and_where(q::Expr::col(q::Todo::IsCompleted).eq(is_completed));
-            }
-            stmt.order_by(q::Todo::CreatedAt, q::Order::Desc)
-                .limit(*limit)
-                .offset(*offset);
-        })
+) -> Result<Vec<todo::Model>, ActionError> {
+    let mut stmt = todo::Entity::find().filter(todo::Column::UserId.eq(*user_id));
+
+    if let Some(is_completed) = is_completed {
+        stmt = stmt.filter(todo::Column::IsCompleted.eq(is_completed));
+    }
+
+    Ok(stmt
+        .order_by(todo::Column::CreatedAt, Order::Desc)
+        .limit(*limit)
+        .offset(*offset)
+        .all(db)
         .await?)
 }
 
-pub async fn create_todo(db: &PgPool, user_id: &Uuid, name: &str) -> Result<Todo, ActionError> {
-    UserRepo::new(db).get_by_id(user_id).await?;
+pub async fn create_todo(
+    db: &DatabaseConnection,
+    user_id: &Uuid,
+    name: &str,
+) -> Result<todo::Model, ActionError> {
+    user::Entity::find_by_id(*user_id)
+        .one(db)
+        .await?
+        .ok_or(ActionError::NotFound)?;
 
     let now = Utc::now();
 
-    let todo = Todo {
-        id: Uuid::new_v4(),
-        user_id: user_id.to_owned(),
-        name: name.into(),
-        is_completed: false,
-        created_at: now,
-        updated_at: now,
-        completed_at: None,
+    let new_todo = todo::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id.to_owned()),
+        name: Set(name.into()),
+        is_completed: Set(false),
+        created_at: Set(now),
+        updated_at: Set(now),
+        completed_at: Set(None),
     };
 
-    Ok(TodoRepo::new(db).insert(todo).await?)
+    Ok(new_todo.insert(db).await?)
 }
 
 pub async fn delete_todos(
-    db: &PgPool,
+    db: &DatabaseConnection,
     user_id: &Uuid,
     is_completed: Option<bool>,
 ) -> Result<(), ActionError> {
-    TodoRepo::new(db)
-        .delete(|stmt| {
-            stmt.and_where(q::Expr::col(q::Todo::UserId).eq(*user_id));
-            if let Some(is_completed) = is_completed {
-                stmt.and_where(q::Expr::col(q::Todo::IsCompleted).eq(is_completed));
-            }
-        })
-        .await?;
+    let mut stmt = todo::Entity::delete_many().filter(todo::Column::UserId.eq(*user_id));
+
+    if let Some(is_completed) = is_completed {
+        stmt = stmt.filter(todo::Column::IsCompleted.eq(is_completed));
+    }
+
+    stmt.exec(db).await?;
 
     Ok(())
 }
 
-pub async fn get_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, ActionError> {
-    let user = UserRepo::new(db)
-        .get_by_id(user_id)
+pub async fn get_todo(
+    db: &DatabaseConnection,
+    user_id: &Uuid,
+    id: &Uuid,
+) -> Result<todo::Model, ActionError> {
+    let user = user::Entity::find_by_id(*user_id)
+        .one(db)
         .await?
         .ok_or(ActionError::NotFound)?;
 
-    let todo = TodoRepo::new(db)
-        .get_by_id(id)
+    let todo = todo::Entity::find_by_id(*id)
+        .one(db)
         .await?
         .ok_or(ActionError::NotFound)?;
 
@@ -108,87 +117,111 @@ pub async fn get_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, Ac
 }
 
 pub async fn update_todo(
-    db: &PgPool,
+    db: &DatabaseConnection,
     user_id: &Uuid,
     id: &Uuid,
     name: &str,
-) -> Result<Todo, ActionError> {
-    let user = UserRepo::new(db)
-        .get_by_id(user_id)
+) -> Result<todo::Model, ActionError> {
+    let user = user::Entity::find_by_id(*user_id)
+        .one(db)
         .await?
         .ok_or(ActionError::NotFound)?;
 
-    let repo = TodoRepo::new(db);
-
-    let mut todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
+    let todo = todo::Entity::find_by_id(*id)
+        .one(db)
+        .await?
+        .ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
     }
 
-    todo.name = name.to_owned();
-    todo.updated_at = Utc::now();
+    let mut todo = todo.into_active_model();
 
-    Ok(repo.update(todo).await?)
+    todo.name = Set(name.to_owned());
+    todo.updated_at = Set(Utc::now());
+
+    Ok(todo.update(db).await?)
 }
 
-pub async fn delete_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<(), ActionError> {
-    let user = UserRepo::new(db)
-        .get_by_id(user_id)
+pub async fn delete_todo(
+    db: &DatabaseConnection,
+    user_id: &Uuid,
+    id: &Uuid,
+) -> Result<(), ActionError> {
+    let user = user::Entity::find_by_id(*user_id)
+        .one(db)
         .await?
         .ok_or(ActionError::NotFound)?;
 
-    let repo = TodoRepo::new(db);
-
-    let todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
+    let todo = todo::Entity::find_by_id(*id)
+        .one(db)
+        .await?
+        .ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
     }
 
-    Ok(repo.delete_by_id(&todo.id).await?)
+    todo.delete(db).await?;
+
+    Ok(())
 }
 
-pub async fn complete_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, ActionError> {
-    let user = UserRepo::new(db)
-        .get_by_id(user_id)
+pub async fn complete_todo(
+    db: &DatabaseConnection,
+    user_id: &Uuid,
+    id: &Uuid,
+) -> Result<todo::Model, ActionError> {
+    let user = user::Entity::find_by_id(*user_id)
+        .one(db)
         .await?
         .ok_or(ActionError::NotFound)?;
 
-    let repo = TodoRepo::new(db);
-
-    let mut todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
+    let todo = todo::Entity::find_by_id(*id)
+        .one(db)
+        .await?
+        .ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
     }
+
+    let mut todo = todo.into_active_model();
 
     let now = Utc::now();
 
-    todo.is_completed = true;
-    todo.completed_at = Some(now);
-    todo.updated_at = now;
+    todo.is_completed = Set(true);
+    todo.completed_at = Set(Some(now));
+    todo.updated_at = Set(now);
 
-    Ok(repo.update(todo).await?)
+    Ok(todo.update(db).await?)
 }
 
-pub async fn revert_todo(db: &PgPool, user_id: &Uuid, id: &Uuid) -> Result<Todo, ActionError> {
-    let user = UserRepo::new(db)
-        .get_by_id(user_id)
+pub async fn revert_todo(
+    db: &DatabaseConnection,
+    user_id: &Uuid,
+    id: &Uuid,
+) -> Result<todo::Model, ActionError> {
+    let user = user::Entity::find_by_id(*user_id)
+        .one(db)
         .await?
         .ok_or(ActionError::NotFound)?;
 
-    let repo = TodoRepo::new(db);
-
-    let mut todo = repo.get_by_id(id).await?.ok_or(ActionError::NotFound)?;
+    let todo = todo::Entity::find_by_id(*id)
+        .one(db)
+        .await?
+        .ok_or(ActionError::NotFound)?;
 
     if todo.user_id != user.id {
         return Err(ActionError::Forbidden);
     }
 
-    todo.is_completed = false;
-    todo.completed_at = None;
-    todo.updated_at = Utc::now();
+    let mut todo = todo.into_active_model();
 
-    Ok(repo.update(todo).await?)
+    todo.is_completed = Set(false);
+    todo.completed_at = Set(None);
+    todo.updated_at = Set(Utc::now());
+
+    Ok(todo.update(db).await?)
 }

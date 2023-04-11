@@ -5,8 +5,8 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router, TypedHeader,
 };
+use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use thiserror::Error;
 use validator::Validate;
 
@@ -16,7 +16,6 @@ use crate::{
         security::SecurityError,
     },
     http::extractors::AuthUser,
-    repository::RepositoryError,
 };
 
 #[derive(Debug, Error)]
@@ -38,7 +37,7 @@ impl IntoResponse for HandlerError {
 
 fn action_into_response(error: ActionError) -> Response {
     match error {
-        ActionError::Repository(inner) => repo_into_response(inner),
+        ActionError::Db(inner) => db_into_response(inner),
         ActionError::Security(inner) => security_into_response(inner),
         ActionError::UserAlredyExists => {
             (StatusCode::BAD_REQUEST, error.to_string()).into_response()
@@ -50,7 +49,7 @@ fn action_into_response(error: ActionError) -> Response {
     }
 }
 
-fn repo_into_response(error: RepositoryError) -> Response {
+fn db_into_response(error: DbErr) -> Response {
     tracing::error!("{}", error);
 
     (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
@@ -95,7 +94,7 @@ pub struct PasswordChange {
 }
 
 pub async fn sign_up(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     Json(credentials): Json<Credentials>,
 ) -> Result<impl IntoResponse, HandlerError> {
     credentials.validate()?;
@@ -106,7 +105,7 @@ pub async fn sign_up(
 }
 
 pub async fn sign_in(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     Json(credentials): Json<Credentials>,
 ) -> Result<impl IntoResponse, HandlerError> {
     credentials.validate()?;
@@ -117,7 +116,7 @@ pub async fn sign_in(
 }
 
 pub async fn sign_refresh(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     TypedHeader(Authorization(token)): TypedHeader<Authorization<Bearer>>,
 ) -> Result<impl IntoResponse, HandlerError> {
     Ok(Json(
@@ -130,7 +129,7 @@ pub async fn profile(user: AuthUser) -> impl IntoResponse {
 }
 
 pub async fn change_password(
-    Extension(db): Extension<PgPool>,
+    Extension(db): Extension<DatabaseConnection>,
     user: AuthUser,
     Json(payload): Json<PasswordChange>,
 ) -> Result<impl IntoResponse, HandlerError> {

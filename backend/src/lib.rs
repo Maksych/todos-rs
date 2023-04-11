@@ -1,5 +1,5 @@
-mod auth;
-mod database;
+pub mod auth;
+pub mod database;
+pub mod entities;
 pub mod http;
-mod repository;
-mod todo;
+pub mod todo;
